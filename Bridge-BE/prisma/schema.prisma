@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL") 
+}
+
+enum BridgeEventType {
+  TOKEN_LOCKED
+  TOKEN_CLAIMED
+  TOKEN_BURNED
+  TOKEN_RELEASED
+}
+
+// prisma/schema.prisma
+model BridgeEvent {
+  id               String           @id @default(uuid())
+  eventType        BridgeEventType
+  chainId          Int
+  blockNumber      BigInt
+  logIndex         Int              @default(0)
+  transactionHash  String
+  tokenAddress     String
+  fromAddress      String?
+  toAddress        String?
+  relayerAddress   String?
+  amount           Decimal          @db.Decimal(78, 0)
+  fee              Decimal?         @db.Decimal(78, 0)
+  nonce            BigInt?
+  targetChainId    Int?
+  sourceChainId    Int?
+  processed        Boolean          @default(false) @map("is_processed")
+  blockTimestamp   DateTime
+  indexedAt        DateTime         @default(now())
+  txHash           String
+  gasUsed          BigInt?
+  gasPrice         Decimal?         @db.Decimal(78, 0)
+  
+  @@unique([transactionHash, logIndex, chainId])
+  @@index([chainId, blockNumber, logIndex])
+  @@index([eventType, processed])
+  @@index([eventType, processed, chainId])   // composite for frequent BE queries (issue #33)
+  @@index([fromAddress])
+  @@index([toAddress])
+  @@index([txHash])
+  @@index([tokenAddress])
+  @@index([blockTimestamp])
+  @@map("bridge_events")
+}
+
+model IndexerCheckpoint {
+  chainId             Int      @id
+  lastProcessedBlock  BigInt   @default(0) @map("last_processed_block")
+  lastProcessedLogIndex Int    @default(0) @map("last_processed_log_index")
+  lastUpdated         DateTime @updatedAt
+  isHealthy           Boolean  @default(true)
+  errorMessage        String?
+
+  @@map("indexer_checkpoints")
+}
+
+model WitnessSubmission {
+  id                  String    @id @default(uuid())
+  txHash              String    @unique
+  sourceEventId       String
+  sourceChainId       Int
+  targetChainId       Int
+  submittedAt         DateTime?
+  submittedTxHash     String?
+  confirmed           Boolean   @default(false)
+  confirmations       Int       @default(0)
+  createdAt           DateTime  @default(now())
+  
+  @@index([sourceChainId, targetChainId])
+  @@index([confirmed])
+  @@map("witness_submissions")
+}
