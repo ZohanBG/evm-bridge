@@ -1,0 +1,18 @@
+# Compiler files
+cache/
+out/
+
+# Dependencies (installed via forge install)
+lib/
+
+# Ignores development broadcast logs
+/broadcast
+
+# Docs
+docs/
+
+# Dotenv file
+.env
+
+# Deploy artifacts
+.deploy-addresses
