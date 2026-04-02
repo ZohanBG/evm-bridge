@@ -1,0 +1,37 @@
+# Claude Code
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDEs
+.idea/
+.vscode/
+*.sublime-workspace
+*.swp
+*.swo
+
+# Security audit (internal only, not for public repo)
+SECURITY_AUDIT.md
+
+# Env files (each sub-project has its own)
+.env
+.env.local
+.env.*.local
+.env.bridge-addresses
+
+# Node
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Temporary
+.temp/
+.tmp/
+*.pid
+*.seed
