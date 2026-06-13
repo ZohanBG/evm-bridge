@@ -63,7 +63,7 @@ export function PixiBridgeCanvas({ pair, direction, onPairChange }: PixiBridgeCa
       const baseAlpha = depth * 0.5 + 0.1;
       g.alpha = baseAlpha;
       starContainer.addChild(g);
-      stars.push({ g, vx: (Math.random() - 0.5) * 0.1 * (1 + depth), vy: (Math.random() - 0.5) * 0.06 * (1 + depth), baseAlpha, depth });
+      stars.push({ g, vx: (Math.random() - 0.5) * 0.03 * (1 + depth), vy: (Math.random() - 0.5) * 0.02 * (1 + depth), baseAlpha, depth });
     }
 
     // ============================
@@ -255,7 +255,8 @@ export function PixiBridgeCanvas({ pair, direction, onPairChange }: PixiBridgeCa
     const coinContainer = new Container();
     app.stage.addChild(coinContainer);
 
-    const coins: { core: Graphics; glow: Graphics; trail: Graphics; progress: number }[] = [];
+    const coins: { core: Graphics; glow: Graphics; trail: Graphics; progress: number; speed: number; arcMul: number; arcSign: number; delay: number }[] = [];
+    const COIN_STAGGER = 0.25; // seconds between successive coin launches
     for (let i = 0; i < COIN_COUNT; i++) {
       const glow = new Graphics();
       glow.circle(0, 0, 12);
@@ -278,7 +279,11 @@ export function PixiBridgeCanvas({ pair, direction, onPairChange }: PixiBridgeCa
       glow.alpha = 0;
       trail.alpha = 0;
 
-      coins.push({ core, glow, trail, progress: i / COIN_COUNT });
+      // Per-coin speed (0.003 – 0.009) and arc magnitude (0.10 – 0.45)
+      const speed = 0.003 + Math.random() * 0.006;
+      const arcMul = 0.10 + Math.random() * 0.35;
+      const arcSign = Math.random() < 0.5 ? -1 : 1;
+      coins.push({ core, glow, trail, progress: 0, speed, arcMul, arcSign, delay: i * COIN_STAGGER });
     }
 
     // ============================
@@ -339,6 +344,8 @@ export function PixiBridgeCanvas({ pair, direction, onPairChange }: PixiBridgeCa
     // Animation
     // ============================
     let elapsed = 0;
+    let lastPair = stateRef.current.pair;
+    let lastDir = stateRef.current.direction;
 
     app.ticker.add((ticker) => {
       elapsed += ticker.deltaTime / 60;
@@ -495,6 +502,19 @@ export function PixiBridgeCanvas({ pair, direction, onPairChange }: PixiBridgeCa
       }
 
       // --- Coins (energy orbs) ---
+      // On pair change OR direction change, reset every coin to the source planet with staggered delays
+      if (curPair !== lastPair || curDir !== lastDir) {
+        lastPair = curPair;
+        lastDir = curDir;
+        for (let i = 0; i < coins.length; i++) {
+          coins[i].progress = 0;
+          coins[i].delay = i * COIN_STAGGER;
+          coins[i].speed = 0.003 + Math.random() * 0.006;
+          coins[i].arcMul = 0.10 + Math.random() * 0.35;
+          coins[i].arcSign = Math.random() < 0.5 ? -1 : 1;
+        }
+      }
+
       if (!curDir) {
         for (const coin of coins) {
           coin.core.alpha = 0;
@@ -505,9 +525,26 @@ export function PixiBridgeCanvas({ pair, direction, onPairChange }: PixiBridgeCa
         const fromNode = curDir === 'outgoing' ? nodes.A : nodes[target as keyof typeof nodes];
         const toNode = curDir === 'outgoing' ? nodes[target as keyof typeof nodes] : nodes.A;
 
+        const dt = ticker.deltaTime / 60;
         for (let i = 0; i < coins.length; i++) {
-          coins[i].progress += 0.005;
-          if (coins[i].progress > 1) coins[i].progress -= 1;
+          if (coins[i].delay > 0) {
+            coins[i].delay -= dt;
+            if (coins[i].delay > 0) {
+              coins[i].core.alpha = 0;
+              coins[i].glow.alpha = 0;
+              coins[i].trail.alpha = 0;
+              continue;
+            }
+            coins[i].progress = 0;
+          }
+          coins[i].progress += coins[i].speed;
+          if (coins[i].progress > 1) {
+            coins[i].progress -= 1;
+            // Re-roll speed, arc magnitude, and arc side on each lap
+            coins[i].speed = 0.003 + Math.random() * 0.006;
+            coins[i].arcMul = 0.10 + Math.random() * 0.35;
+            coins[i].arcSign = Math.random() < 0.5 ? -1 : 1;
+          }
 
           const t = coins[i].progress;
           // Quadratic bezier curve — always arc "outward" from triangle center
@@ -517,15 +554,11 @@ export function PixiBridgeCanvas({ pair, direction, onPairChange }: PixiBridgeCa
           // Perpendicular unit vector (rotate 90° CCW)
           const perpX = -dy / len;
           const perpY = dx / len;
-          // Arc outward: use fixed magnitude, flip sign so arc bows away from triangle center
           const midX = (fromNode.x + toNode.x) / 2;
           const midY = (fromNode.y + toNode.y) / 2;
-          const triCenterX = (nodes.A.x + nodes.B.x + nodes.C.x) / 3;
-          const triCenterY = (nodes.A.y + nodes.B.y + nodes.C.y) / 3;
-          // Dot product to check which side of the edge the center is on
-          const toCenter = (triCenterX - midX) * perpX + (triCenterY - midY) * perpY;
-          const sign = toCenter > 0 ? -1 : 1; // arc away from center
-          const arcAmount = len * 0.25;
+          // Random per-coin side so coins arc above AND below the edge
+          const sign = coins[i].arcSign;
+          const arcAmount = len * coins[i].arcMul;
           const cx = midX + perpX * arcAmount * sign;
           const cy = midY + perpY * arcAmount * sign;
           // Quadratic bezier interpolation

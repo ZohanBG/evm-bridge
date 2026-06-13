@@ -316,13 +316,17 @@ contract BridgeTest is BridgeTestBase {
     }
 
     function test_Lock_CooldownPreventsSpam() public {
-        vm.prank(owner);
-        bridgeA.setCooldownPeriod(60);
-
+        // First lock with no cooldown active — this seeds lastBridgeTime[user]
+        // (otherwise it stays at 0 and the test would trip the cooldown on the
+        // very first call because block.timestamp starts at 1 in Foundry).
         _lock(user, TEST_AMOUNT);
         uint256 lastBridge = bridgeA.lastBridgeTime(user);
 
-        // Warp to 30 seconds after the lock — elapsed=30, remaining=30
+        // Now activate the cooldown for subsequent locks
+        vm.prank(owner);
+        bridgeA.setCooldownPeriod(60);
+
+        // Warp to 30 seconds after the first lock — elapsed=30, remaining=30
         vm.warp(lastBridge + 30);
 
         vm.startPrank(user);
